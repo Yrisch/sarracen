@@ -323,6 +323,8 @@ def read_phantom(filename: str,
                           if key != 'mass'}
                 df_list.append(SarracenDataFrame(df_sinks,
                                                  params=params))
+            else:
+            	df_list.append(None)
         else:
             df_list = [SarracenDataFrame(pd.concat([df, df_sinks],
                                                    ignore_index=True),
