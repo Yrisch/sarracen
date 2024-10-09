@@ -2,15 +2,16 @@
 Contains several interpolation functions which produce interpolated 2D or 1D
 arrays of SPH data.
 """
+
+import warnings
+from typing import Tuple, Union
+
 import numpy as np
 import pandas as pd
 from scipy.spatial.transform import Rotation
 
 from ..interpolate import BaseBackend, CPUBackend, GPUBackend
 from ..kernels import BaseKernel
-
-from typing import Tuple, Union
-import warnings
 
 
 def _default_xy(data, x, y):
@@ -62,23 +63,30 @@ def _default_xyz(data, x, y, z):
     zcol = data.zcol
 
     if x is None:
-        x = xcol if not y == xcol and not z == xcol else \
-            ycol if not y == ycol and not z == ycol else zcol
+        x = (
+            xcol
+            if not y == xcol and not z == xcol
+            else ycol if not y == ycol and not z == ycol else zcol
+        )
     if y is None:
-        y = ycol if not x == ycol and not z == ycol else \
-            xcol if not x == xcol and not z == xcol else zcol
+        y = (
+            ycol
+            if not x == ycol and not z == ycol
+            else xcol if not x == xcol and not z == xcol else zcol
+        )
     if z is None:
-        z = zcol if not x == zcol and not y == zcol else \
-            ycol if not x == ycol and not y == ycol else xcol
+        z = (
+            zcol
+            if not x == zcol and not y == zcol
+            else ycol if not x == ycol and not y == ycol else xcol
+        )
 
     return x, y, z
 
 
-def _default_bounds(data,
-                    x,
-                    y,
-                    xlim,
-                    ylim) -> Tuple[Tuple[float, float], Tuple[float, float]]:
+def _default_bounds(
+    data, x, y, xlim, ylim
+) -> Tuple[Tuple[float, float], Tuple[float, float]]:
     """
     Utility function to determine the 2-dimensional boundaries to use in 2D
     interpolation.
@@ -114,10 +122,9 @@ def _default_bounds(data,
     return (x_min, x_max), (y_min, y_max)
 
 
-def _set_pixels(x_pixels: int,
-                y_pixels: int,
-                xlim: Tuple[float, float],
-                ylim: Tuple[float, float]) -> Tuple[int, int]:
+def _set_pixels(
+    x_pixels: int, y_pixels: int, xlim: Tuple[float, float], ylim: Tuple[float, float]
+) -> Tuple[int, int]:
     """
     Utility function to determine the number of pixels to interpolate over in
     2D interpolation.
@@ -173,20 +180,22 @@ def _verify_columns(data, x, y):
         not exist in `data`.
     """
     if x not in data.columns:
-        raise KeyError(f"x-directional column '{x}' does not exist in the "
-                       f"provided dataset.")
+        raise KeyError(
+            f"x-directional column '{x}' does not exist in the " f"provided dataset."
+        )
     if y not in data.columns:
-        raise KeyError(f"y-directional column '{y}' does not exist in the "
-                       f"provided dataset.")
+        raise KeyError(
+            f"y-directional column '{y}' does not exist in the " f"provided dataset."
+        )
     if data.hcol is None:
-        raise KeyError("Smoothing length column does not exist in the "
-                       "provided dataset.")
+        raise KeyError(
+            "Smoothing length column does not exist in the " "provided dataset."
+        )
 
 
-def _check_boundaries(x_pixels: int,
-                      y_pixels: int,
-                      xlim: Tuple[float, float],
-                      ylim: Tuple[float, float]):
+def _check_boundaries(
+    x_pixels: int, y_pixels: int, xlim: Tuple[float, float], ylim: Tuple[float, float]
+):
     """
     Verify that the pixel count and boundaries of a 2D plot describe a valid
     region.
@@ -268,26 +277,29 @@ def _rotate_data(data, x, y, z, rotation, rot_origin):
     z_data = data[z].to_numpy()
     if rotation is not None:
         if not isinstance(rotation, Rotation):
-            rotation = Rotation.from_euler('zyx', rotation, degrees=True)
+            rotation = Rotation.from_euler("zyx", rotation, degrees=True)
 
         vectors = data[[x, y, z]].to_numpy()
 
         # warn whenever rotation is applied
-        msg = ("The default rotation point is currently the midpoint of the "
-               "x/y/z bounds, but will change to [x, y, z] = [0, 0, 0] in "
-               "Sarracen version 1.3.0.")
+        msg = (
+            "The default rotation point is currently the midpoint of the "
+            "x/y/z bounds, but will change to [x, y, z] = [0, 0, 0] in "
+            "Sarracen version 1.3.0."
+        )
         warnings.warn(msg, DeprecationWarning, stacklevel=6)
 
         if rot_origin is None:
             # rot_origin = [0, 0, 0]
             rot_origin = (vectors.min(0) + vectors.max(0)) / 2
-        elif rot_origin == 'com':
+        elif rot_origin == "com":
             rot_origin = data.centre_of_mass()
-        elif rot_origin == 'midpoint':
+        elif rot_origin == "midpoint":
             rot_origin = (vectors.min(0) + vectors.max(0)) / 2
         elif not isinstance(rot_origin, (list, pd.Series, np.ndarray)):
-            raise ValueError("rot_origin should be an [x, y, z] point or "
-                             "'com' or 'midpoint'")
+            raise ValueError(
+                "rot_origin should be an [x, y, z] point or " "'com' or 'midpoint'"
+            )
         elif len(rot_origin) != 3:
             raise ValueError("rot_origin should specify [x, y, z] point.")
 
@@ -332,18 +344,24 @@ def _rotate_xyz(data, x, y, z, rotation, rot_origin):
     x_data, y_data, z_data: ndarray
         The rotated x, y, and z directional data.
     """
-    rotated_x, rotated_y, rotated_z = _rotate_data(data, data.xcol, data.ycol,
-                                                   data.zcol, rotation,
-                                                   rot_origin)
-    x_data = rotated_x if x == data.xcol else \
-        rotated_y if x == data.ycol else \
-        rotated_z if x == data.zcol else data[x]
-    y_data = rotated_x if y == data.xcol else \
-        rotated_y if y == data.ycol else \
-        rotated_z if y == data.zcol else data[y]
-    z_data = rotated_x if z == data.xcol else \
-        rotated_y if z == data.ycol else \
-        rotated_z if z == data.zcol else data[z]
+    rotated_x, rotated_y, rotated_z = _rotate_data(
+        data, data.xcol, data.ycol, data.zcol, rotation, rot_origin
+    )
+    x_data = (
+        rotated_x
+        if x == data.xcol
+        else rotated_y if x == data.ycol else rotated_z if x == data.zcol else data[x]
+    )
+    y_data = (
+        rotated_x
+        if y == data.xcol
+        else rotated_y if y == data.ycol else rotated_z if y == data.zcol else data[y]
+    )
+    z_data = (
+        rotated_x
+        if z == data.xcol
+        else rotated_y if z == data.ycol else rotated_z if z == data.zcol else data[z]
+    )
 
     return x_data, y_data, z_data
 
@@ -379,55 +397,60 @@ def _corotate(corotation, rotation):
     else:
         if isinstance(rotation, Rotation):
             rotation = rotation.as_rotvec(degrees=True)
-        rotation = np.array([angle * 180/np.pi + rotation[0],
-                             rotation[1],
-                             rotation[2]])
-        rotation = Rotation.from_euler('zyx', rotation, degrees=True)
+        rotation = np.array(
+            [angle * 180 / np.pi + rotation[0], rotation[1], rotation[2]]
+        )
+        rotation = Rotation.from_euler("zyx", rotation, degrees=True)
 
     return rotation, rot_origin
 
 
-def _get_mass(data: 'SarracenDataFrame'):  # noqa: F821
+def _get_mass(data: "SarracenDataFrame"):  # noqa: F821
     if data.mcol is None:
-        if 'mass' not in data.params:
-            raise KeyError("'mass' column does not exist in this "
-                           "SarracenDataFrame.")
-        return data.params['mass']
+        if "mass" not in data.params:
+            raise KeyError("'mass' column does not exist in this " "SarracenDataFrame.")
+        return data.params["mass"]
 
     return data[data.mcol].to_numpy()
 
 
-def _get_density(data: 'SarracenDataFrame'):  # noqa: F821
+def _get_density(data: "SarracenDataFrame"):  # noqa: F821
     if data.rhocol is None:
-        if data.hcol not in data.columns or 'hfact' not in data.params:
-            raise KeyError('Density cannot be derived from the columns in '
-                           'this SarracenDataFrame.')
+        if data.hcol not in data.columns or "hfact" not in data.params:
+            raise KeyError(
+                "Density cannot be derived from the columns in "
+                "this SarracenDataFrame."
+            )
 
-        hfact = data.params['hfact']
+        hfact = data.params["hfact"]
         mass = _get_mass(data)
-        return ((hfact / data[data.hcol])**(data.get_dim()) * mass).to_numpy()
+        return ((hfact / data[data.hcol]) ** (data.get_dim()) * mass).to_numpy()
 
     return data[data.rhocol].to_numpy()
 
 
-def _get_weight(data: 'SarracenDataFrame',  # noqa: F821
-                target: Union[str, np.ndarray],
-                dens_weight: bool):
+def _get_weight(
+    data: "SarracenDataFrame",  # noqa: F821
+    target: Union[str, np.ndarray],
+    dens_weight: bool,
+):
 
     if type(target) is str:
-        if target == 'rho':
+        if target == "rho":
             target_data = _get_density(data)
         else:
             if target not in data.columns:
-                raise KeyError(f"Target column '{target}' does not exist in "
-                               f"provided dataset.")
+                raise KeyError(
+                    f"Target column '{target}' does not exist in " f"provided dataset."
+                )
 
             target_data = data[target].to_numpy()
     elif type(target) is np.ndarray:
         target_data = target
     else:
-        raise KeyError(f"Target must be of type str or ndarray. "
-                       f"Found: '{type(target)}'")
+        raise KeyError(
+            f"Target must be of type str or ndarray. " f"Found: '{type(target)}'"
+        )
 
     mass_data = _get_mass(data)
     if dens_weight:
@@ -437,13 +460,15 @@ def _get_weight(data: 'SarracenDataFrame',  # noqa: F821
         return target_data * mass_data / rho_data
 
 
-def _get_smoothing_lengths(data: 'SarracenDataFrame',  # noqa: F821
-                           hmin: float,
-                           x_pixels: int,
-                           y_pixels: int,
-                           xlim: Tuple[float, float],
-                           ylim: Tuple[float, float]):
-    """ Return smoothing lengths, imposing a min length if hmin is True. """
+def _get_smoothing_lengths(
+    data: "SarracenDataFrame",  # noqa: F821
+    hmin: float,
+    x_pixels: int,
+    y_pixels: int,
+    xlim: Tuple[float, float],
+    ylim: Tuple[float, float],
+):
+    """Return smoothing lengths, imposing a min length if hmin is True."""
 
     if hmin:
         pix_size = (xlim[1] - xlim[0]) / x_pixels
@@ -455,20 +480,22 @@ def _get_smoothing_lengths(data: 'SarracenDataFrame',  # noqa: F821
     return h_data
 
 
-def interpolate_2d(data: 'SarracenDataFrame',  # noqa: F821
-                   target: str,
-                   x: str = None,
-                   y: str = None,
-                   kernel: BaseKernel = None,
-                   x_pixels: int = None,
-                   y_pixels: int = None,
-                   xlim: Tuple[float, float] = None,
-                   ylim: Tuple[float, float] = None,
-                   exact: bool = False,
-                   backend: str = None,
-                   dens_weight: bool = False,
-                   normalize: bool = True,
-                   hmin: bool = False) -> np.ndarray:
+def interpolate_2d(
+    data: "SarracenDataFrame",  # noqa: F821
+    target: str,
+    x: str = None,
+    y: str = None,
+    kernel: BaseKernel = None,
+    x_pixels: int = None,
+    y_pixels: int = None,
+    xlim: Tuple[float, float] = None,
+    ylim: Tuple[float, float] = None,
+    exact: bool = False,
+    backend: str = None,
+    dens_weight: bool = False,
+    normalize: bool = True,
+    hmin: bool = False,
+) -> np.ndarray:
     """
     Interpolate particle data across two directional axes to a 2D grid of
     pixels.
@@ -541,39 +568,61 @@ def interpolate_2d(data: 'SarracenDataFrame',  # noqa: F821
 
     h_data = _get_smoothing_lengths(data, hmin, x_pixels, y_pixels, xlim, ylim)
 
-    grid = get_backend(backend)\
-        .interpolate_2d_render(data[x].to_numpy(), data[y].to_numpy(),
-                               w_data, h_data, kernel.w, kernel.get_radius(),
-                               x_pixels, y_pixels, xlim[0], xlim[1],
-                               ylim[0], ylim[1], exact)
+    grid = get_backend(backend).interpolate_2d_render(
+        data[x].to_numpy(),
+        data[y].to_numpy(),
+        w_data,
+        h_data,
+        kernel.w,
+        kernel.get_radius(),
+        x_pixels,
+        y_pixels,
+        xlim[0],
+        xlim[1],
+        ylim[0],
+        ylim[1],
+        exact,
+    )
 
     if normalize:
         w_norm = _get_weight(data, np.array([1] * len(w_data)), dens_weight)
-        norm_grid = get_backend(backend)\
-            .interpolate_2d_render(data[x].to_numpy(), data[y].to_numpy(),
-                                   w_norm, h_data, kernel.w,
-                                   kernel.get_radius(), x_pixels, y_pixels,
-                                   xlim[0], xlim[1], ylim[0], ylim[1], exact)
+        norm_grid = get_backend(backend).interpolate_2d_render(
+            data[x].to_numpy(),
+            data[y].to_numpy(),
+            w_norm,
+            h_data,
+            kernel.w,
+            kernel.get_radius(),
+            x_pixels,
+            y_pixels,
+            xlim[0],
+            xlim[1],
+            ylim[0],
+            ylim[1],
+            exact,
+        )
         grid = np.nan_to_num(grid / norm_grid)
 
     return grid
 
 
-def interpolate_2d_vec(data: 'SarracenDataFrame',  # noqa: F821
-                       target_x: str,
-                       target_y: str,
-                       x: str = None,
-                       y: str = None,
-                       kernel: BaseKernel = None,
-                       x_pixels: int = None,
-                       y_pixels: int = None,
-                       xlim: Tuple[float, float] = None,
-                       ylim: Tuple[float, float] = None,
-                       exact: bool = False,
-                       backend: str = None,
-                       dens_weight: bool = False,
-                       normalize: bool = True,
-                       hmin: bool = False):
+def interpolate_2d_vec(
+    data: "SarracenDataFrame",  # noqa: F821
+    target_x: str,
+    target_y: str,
+    x: str = None,
+    y: str = None,
+    kernel: BaseKernel = None,
+    x_pixels: int = None,
+    y_pixels: int = None,
+    xlim: Tuple[float, float] = None,
+    ylim: Tuple[float, float] = None,
+    exact: bool = False,
+    backend: str = None,
+    dens_weight: bool = False,
+    normalize: bool = True,
+    hmin: bool = False,
+):
     """
     Interpolate vector particle data across two directional axes to a 2D grid
     of particles.
@@ -648,39 +697,62 @@ def interpolate_2d_vec(data: 'SarracenDataFrame',  # noqa: F821
 
     h_data = _get_smoothing_lengths(data, hmin, x_pixels, y_pixels, xlim, ylim)
 
-    gridx, gridy = get_backend(backend)\
-        .interpolate_2d_render_vec(data[x].to_numpy(), data[y].to_numpy(),
-                                   wx_data, wy_data, h_data, kernel.w,
-                                   kernel.get_radius(), x_pixels, y_pixels,
-                                   xlim[0], xlim[1], ylim[0], ylim[1], exact)
+    gridx, gridy = get_backend(backend).interpolate_2d_render_vec(
+        data[x].to_numpy(),
+        data[y].to_numpy(),
+        wx_data,
+        wy_data,
+        h_data,
+        kernel.w,
+        kernel.get_radius(),
+        x_pixels,
+        y_pixels,
+        xlim[0],
+        xlim[1],
+        ylim[0],
+        ylim[1],
+        exact,
+    )
 
     if normalize:
         wx_norm = _get_weight(data, np.array([1] * len(wx_data)), dens_weight)
         wy_norm = _get_weight(data, np.array([1] * len(wy_data)), dens_weight)
-        norm_gridx, norm_gridy = get_backend(backend)\
-            .interpolate_2d_render_vec(data[x].to_numpy(), data[y].to_numpy(),
-                                       wx_norm, wy_norm, h_data, kernel.w,
-                                       kernel.get_radius(), x_pixels, y_pixels,
-                                       xlim[0], xlim[1], ylim[0], ylim[1],
-                                       exact)
+        norm_gridx, norm_gridy = get_backend(backend).interpolate_2d_render_vec(
+            data[x].to_numpy(),
+            data[y].to_numpy(),
+            wx_norm,
+            wy_norm,
+            h_data,
+            kernel.w,
+            kernel.get_radius(),
+            x_pixels,
+            y_pixels,
+            xlim[0],
+            xlim[1],
+            ylim[0],
+            ylim[1],
+            exact,
+        )
         gridx = np.nan_to_num(gridx / norm_gridx)
         gridy = np.nan_to_num(gridy / norm_gridy)
 
     return (gridx, gridy)
 
 
-def interpolate_2d_line(data: 'SarracenDataFrame',  # noqa: F821
-                        target: str,
-                        x: str = None,
-                        y: str = None,
-                        kernel: BaseKernel = None,
-                        pixels: int = None,
-                        xlim: Tuple[float, float] = None,
-                        ylim: Tuple[float, float] = None,
-                        backend: str = None,
-                        dens_weight: bool = False,
-                        normalize: bool = True,
-                        hmin: bool = False) -> np.ndarray:
+def interpolate_2d_line(
+    data: "SarracenDataFrame",  # noqa: F821
+    target: str,
+    x: str = None,
+    y: str = None,
+    kernel: BaseKernel = None,
+    pixels: int = None,
+    xlim: Tuple[float, float] = None,
+    ylim: Tuple[float, float] = None,
+    backend: str = None,
+    dens_weight: bool = False,
+    normalize: bool = True,
+    hmin: bool = False,
+) -> np.ndarray:
     """
     Interpolate particle data across two directional axes to a 1D cross-section
     line.
@@ -749,53 +821,71 @@ def interpolate_2d_line(data: 'SarracenDataFrame',  # noqa: F821
 
     xlim, ylim = _default_bounds(data, x, y, xlim, ylim)
     if xlim[0] == xlim[1] and ylim[0] == ylim[1]:
-        raise ValueError('Zero length cross section!')
+        raise ValueError("Zero length cross section!")
 
     kernel = kernel if kernel is not None else data.kernel
     backend = backend if backend is not None else data.backend
     pixels = pixels if pixels is not None else 512
 
     if pixels <= 0:
-        raise ValueError('pixcount must be greater than zero!')
+        raise ValueError("pixcount must be greater than zero!")
 
     if hmin:
-        pix_size = np.sqrt((xlim[1] - xlim[0])**2
-                           + (ylim[1] - ylim[0])**2) / pixels
+        pix_size = np.sqrt((xlim[1] - xlim[0]) ** 2 + (ylim[1] - ylim[0]) ** 2) / pixels
         h_data = np.maximum(data[data.hcol].to_numpy(), 0.5 * pix_size)
     else:
         h_data = data[data.hcol].to_numpy()
 
-    grid = get_backend(backend) \
-        .interpolate_2d_cross(data[x].to_numpy(), data[y].to_numpy(),
-                              w_data, h_data, kernel.w, kernel.get_radius(),
-                              pixels, xlim[0], xlim[1], ylim[0], ylim[1])
+    grid = get_backend(backend).interpolate_2d_cross(
+        data[x].to_numpy(),
+        data[y].to_numpy(),
+        w_data,
+        h_data,
+        kernel.w,
+        kernel.get_radius(),
+        pixels,
+        xlim[0],
+        xlim[1],
+        ylim[0],
+        ylim[1],
+    )
 
     if normalize:
         w_norm = _get_weight(data, np.array([1] * len(w_data)), dens_weight)
-        norm_grid = get_backend(backend) \
-            .interpolate_2d_cross(data[x].to_numpy(), data[y].to_numpy(),
-                                  w_norm, h_data, kernel.w,
-                                  kernel.get_radius(), pixels, xlim[0],
-                                  xlim[1], ylim[0], ylim[1])
+        norm_grid = get_backend(backend).interpolate_2d_cross(
+            data[x].to_numpy(),
+            data[y].to_numpy(),
+            w_norm,
+            h_data,
+            kernel.w,
+            kernel.get_radius(),
+            pixels,
+            xlim[0],
+            xlim[1],
+            ylim[0],
+            ylim[1],
+        )
         grid = np.nan_to_num(grid / norm_grid)
 
     return grid
 
 
-def interpolate_3d_line(data: 'SarracenDataFrame',  # noqa: F821
-                        target: str,
-                        x: str = None,
-                        y: str = None,
-                        z: str = None,
-                        kernel: BaseKernel = None,
-                        pixels: int = None,
-                        xlim: Tuple[float, float] = None,
-                        ylim: Tuple[float, float] = None,
-                        zlim: Tuple[float, float] = None,
-                        backend: str = None,
-                        dens_weight: bool = False,
-                        normalize: bool = True,
-                        hmin: bool = False):
+def interpolate_3d_line(
+    data: "SarracenDataFrame",  # noqa: F821
+    target: str,
+    x: str = None,
+    y: str = None,
+    z: str = None,
+    kernel: BaseKernel = None,
+    pixels: int = None,
+    xlim: Tuple[float, float] = None,
+    ylim: Tuple[float, float] = None,
+    zlim: Tuple[float, float] = None,
+    backend: str = None,
+    dens_weight: bool = False,
+    normalize: bool = True,
+    hmin: bool = False,
+):
     """
     Interpolate vector particle data across three directional axes to a 1D
     line.
@@ -871,58 +961,87 @@ def interpolate_3d_line(data: 'SarracenDataFrame',  # noqa: F821
 
     xlim, ylim = _default_bounds(data, x, y, xlim, ylim)
     if ylim[1] == ylim[0] and xlim[1] == xlim[0] and zlim[1] == zlim[0]:
-        raise ValueError('Zero length cross section!')
+        raise ValueError("Zero length cross section!")
 
     kernel = kernel if kernel is not None else data.kernel
     backend = backend if backend is not None else data.backend
 
     if pixels <= 0:
-        raise ValueError('pixcount must be greater than zero!')
+        raise ValueError("pixcount must be greater than zero!")
 
     if hmin:
-        pix_size = np.sqrt((xlim[1] - xlim[0])**2
-                           + (ylim[1] - ylim[0])**2
-                           + (zlim[1] - zlim[0])**2) / pixels
+        pix_size = (
+            np.sqrt(
+                (xlim[1] - xlim[0]) ** 2
+                + (ylim[1] - ylim[0]) ** 2
+                + (zlim[1] - zlim[0]) ** 2
+            )
+            / pixels
+        )
         h_data = np.maximum(data[data.hcol].to_numpy(), 0.5 * pix_size)
     else:
         h_data = data[data.hcol].to_numpy()
 
-    grid = get_backend(backend) \
-        .interpolate_3d_line(data[x].to_numpy(), data[y].to_numpy(),
-                             data[z].to_numpy(), w_data, h_data, kernel.w,
-                             kernel.get_radius(), pixels, xlim[0], xlim[1],
-                             ylim[0], ylim[1], zlim[0], zlim[1])
+    grid = get_backend(backend).interpolate_3d_line(
+        data[x].to_numpy(),
+        data[y].to_numpy(),
+        data[z].to_numpy(),
+        w_data,
+        h_data,
+        kernel.w,
+        kernel.get_radius(),
+        pixels,
+        xlim[0],
+        xlim[1],
+        ylim[0],
+        ylim[1],
+        zlim[0],
+        zlim[1],
+    )
 
     if normalize:
         w_norm = _get_weight(data, np.array([1] * len(w_data)), dens_weight)
-        norm_grid = get_backend(backend) \
-            .interpolate_3d_line(data[x].to_numpy(), data[y].to_numpy(),
-                                 data[z].to_numpy(), w_norm, h_data, kernel.w,
-                                 kernel.get_radius(), pixels, xlim[0], xlim[1],
-                                 ylim[0], ylim[1], zlim[0], zlim[1])
+        norm_grid = get_backend(backend).interpolate_3d_line(
+            data[x].to_numpy(),
+            data[y].to_numpy(),
+            data[z].to_numpy(),
+            w_norm,
+            h_data,
+            kernel.w,
+            kernel.get_radius(),
+            pixels,
+            xlim[0],
+            xlim[1],
+            ylim[0],
+            ylim[1],
+            zlim[0],
+            zlim[1],
+        )
         grid = np.nan_to_num(grid / norm_grid)
 
     return grid
 
 
-def interpolate_3d_proj(data: 'SarracenDataFrame',  # noqa: F821
-                        target: str,
-                        x: str = None,
-                        y: str = None,
-                        kernel: BaseKernel = None,
-                        integral_samples: int = 1000,
-                        corotation: Union[np.ndarray, list] = None,
-                        rotation: Union[np.ndarray, list, Rotation] = None,
-                        rot_origin: Union[np.ndarray, list, str] = None,
-                        x_pixels: int = None,
-                        y_pixels: int = None,
-                        xlim: Tuple[float, float] = None,
-                        ylim: Tuple[float, float] = None,
-                        exact: bool = False,
-                        backend: str = None,
-                        dens_weight: bool = None,
-                        normalize: bool = True,
-                        hmin: bool = False):
+def interpolate_3d_proj(
+    data: "SarracenDataFrame",  # noqa: F821
+    target: str,
+    x: str = None,
+    y: str = None,
+    kernel: BaseKernel = None,
+    integral_samples: int = 1000,
+    corotation: Union[np.ndarray, list] = None,
+    rotation: Union[np.ndarray, list, Rotation] = None,
+    rot_origin: Union[np.ndarray, list, str] = None,
+    x_pixels: int = None,
+    y_pixels: int = None,
+    xlim: Tuple[float, float] = None,
+    ylim: Tuple[float, float] = None,
+    exact: bool = False,
+    backend: str = None,
+    dens_weight: bool = None,
+    normalize: bool = True,
+    hmin: bool = False,
+):
     """
     Interpolate 3D particle data to a 2D grid of pixels.
 
@@ -1007,7 +1126,7 @@ def interpolate_3d_proj(data: 'SarracenDataFrame',  # noqa: F821
     _verify_columns(data, x, y)
 
     if dens_weight is None:
-        dens_weight = (target != 'rho')
+        dens_weight = target != "rho"
 
     w_data = _get_weight(data, target, dens_weight)
 
@@ -1025,44 +1144,67 @@ def interpolate_3d_proj(data: 'SarracenDataFrame',  # noqa: F821
     weight_function = kernel.get_column_kernel_func(integral_samples)
 
     h_data = _get_smoothing_lengths(data, hmin, x_pixels, y_pixels, xlim, ylim)
-
-    grid = get_backend(backend) \
-        .interpolate_3d_projection(x_data, y_data, z_data, w_data, h_data,
-                                   weight_function, kernel.get_radius(),
-                                   x_pixels, y_pixels,
-                                   xlim[0], xlim[1], ylim[0], ylim[1], exact)
+    grid = get_backend(backend).interpolate_3d_projection(
+        x_data,
+        y_data,
+        z_data,
+        w_data,
+        h_data,
+        weight_function,
+        kernel.get_radius(),
+        x_pixels,
+        y_pixels,
+        xlim[0],
+        xlim[1],
+        ylim[0],
+        ylim[1],
+        exact,
+    )
 
     if normalize:
         w_norm = _get_weight(data, np.array([1] * len(w_data)), dens_weight)
-        norm_grid = get_backend(backend) \
-            .interpolate_3d_projection(x_data, y_data, z_data, w_norm, h_data,
-                                       weight_function, kernel.get_radius(),
-                                       x_pixels, y_pixels, xlim[0], xlim[1],
-                                       ylim[0], ylim[1], exact)
+        norm_grid = get_backend(backend).interpolate_3d_projection(
+            x_data,
+            y_data,
+            z_data,
+            w_norm,
+            h_data,
+            weight_function,
+            kernel.get_radius(),
+            x_pixels,
+            y_pixels,
+            xlim[0],
+            xlim[1],
+            ylim[0],
+            ylim[1],
+            exact,
+        )
         grid = np.nan_to_num(grid / norm_grid)
 
     return grid
 
 
-def interpolate_3d_vec(data: 'SarracenDataFrame',  # noqa: F821
-                       target_x: str,
-                       target_y: str,
-                       target_z: str,
-                       x: str = None,
-                       y: str = None,
-                       kernel: BaseKernel = None,
-                       integral_samples: int = 1000,
-                       rotation: Union[np.ndarray, list, Rotation] = None,
-                       rot_origin: Union[np.ndarray, list, str] = None,
-                       x_pixels: int = None,
-                       y_pixels: int = None,
-                       xlim: Tuple[float, float] = None,
-                       ylim: Tuple[float, float] = None,
-                       exact: bool = False,
-                       backend: str = None,
-                       dens_weight: bool = False,
-                       normalize: bool = True,
-                       hmin: bool = False):
+def interpolate_3d_vec(
+    data: "SarracenDataFrame",  # noqa: F821
+    target_x: str,
+    target_y: str,
+    target_z: str,
+    x: str = None,
+    y: str = None,
+    kernel: BaseKernel = None,
+    integral_samples: int = 1000,
+    rotation: Union[np.ndarray, list, Rotation] = None,
+    rot_origin: Union[np.ndarray, list, str] = None,
+    x_pixels: int = None,
+    y_pixels: int = None,
+    xlim: Tuple[float, float] = None,
+    ylim: Tuple[float, float] = None,
+    exact: bool = False,
+    backend: str = None,
+    dens_weight: bool = False,
+    normalize: bool = True,
+    hmin: bool = False,
+):
     """
     Interpolate 3D vector particle data to a 2D grid of pixels.
 
@@ -1148,11 +1290,13 @@ def interpolate_3d_vec(data: 'SarracenDataFrame',  # noqa: F821
 
     x_data, y_data, _ = _rotate_xyz(data, x, y, z, rotation, rot_origin)
     if target_z not in data.columns:
-        raise KeyError(f"z-directional target column '{target_z}' does not "
-                       f"exist in the provided dataset.")
-    target_x_data, target_y_data, _ = _rotate_data(data, target_x, target_y,
-                                                   target_z, rotation,
-                                                   rot_origin)
+        raise KeyError(
+            f"z-directional target column '{target_z}' does not "
+            f"exist in the provided dataset."
+        )
+    target_x_data, target_y_data, _ = _rotate_data(
+        data, target_x, target_y, target_z, rotation, rot_origin
+    )
 
     wx_data = _get_weight(data, target_x_data, dens_weight)
     wy_data = _get_weight(data, target_y_data, dens_weight)
@@ -1162,45 +1306,67 @@ def interpolate_3d_vec(data: 'SarracenDataFrame',  # noqa: F821
     backend = backend if backend is not None else data.backend
 
     weight_function = kernel.get_column_kernel_func(integral_samples)
-    gridx, gridy = get_backend(backend) \
-        .interpolate_3d_projection_vec(x_data, y_data, wx_data, wy_data,
-                                       h_data, weight_function,
-                                       kernel.get_radius(), x_pixels, y_pixels,
-                                       xlim[0], xlim[1], ylim[0], ylim[1],
-                                       exact)
+    gridx, gridy = get_backend(backend).interpolate_3d_projection_vec(
+        x_data,
+        y_data,
+        wx_data,
+        wy_data,
+        h_data,
+        weight_function,
+        kernel.get_radius(),
+        x_pixels,
+        y_pixels,
+        xlim[0],
+        xlim[1],
+        ylim[0],
+        ylim[1],
+        exact,
+    )
     if normalize:
         wx_norm = _get_weight(data, np.array([1] * len(wx_data)), dens_weight)
         wy_norm = _get_weight(data, np.array([1] * len(wy_data)), dens_weight)
-        norm_gridx, norm_gridy = get_backend(backend) \
-            .interpolate_3d_projection_vec(x_data, y_data, wx_norm, wy_norm,
-                                           h_data, weight_function,
-                                           kernel.get_radius(), x_pixels,
-                                           y_pixels, xlim[0], xlim[1],
-                                           ylim[0], ylim[1], exact)
+        norm_gridx, norm_gridy = get_backend(backend).interpolate_3d_projection_vec(
+            x_data,
+            y_data,
+            wx_norm,
+            wy_norm,
+            h_data,
+            weight_function,
+            kernel.get_radius(),
+            x_pixels,
+            y_pixels,
+            xlim[0],
+            xlim[1],
+            ylim[0],
+            ylim[1],
+            exact,
+        )
         gridx = np.nan_to_num(gridx / norm_gridx)
         gridy = np.nan_to_num(gridy / norm_gridy)
 
     return (gridx, gridy)
 
 
-def interpolate_3d_cross(data: 'SarracenDataFrame',  # noqa: F821
-                         target: str,
-                         x: str = None,
-                         y: str = None,
-                         z: str = None,
-                         z_slice: float = None,
-                         kernel: BaseKernel = None,
-                         corotation: Union[np.ndarray, list] = None,
-                         rotation: Union[np.ndarray, list, Rotation] = None,
-                         rot_origin: Union[np.ndarray, list, str] = None,
-                         x_pixels: int = None,
-                         y_pixels: int = None,
-                         xlim: Tuple[float, float] = None,
-                         ylim: Tuple[float, float] = None,
-                         backend: str = None,
-                         dens_weight: bool = False,
-                         normalize: bool = True,
-                         hmin: bool = False):
+def interpolate_3d_cross(
+    data: "SarracenDataFrame",  # noqa: F821
+    target: str,
+    x: str = None,
+    y: str = None,
+    z: str = None,
+    z_slice: float = None,
+    kernel: BaseKernel = None,
+    corotation: Union[np.ndarray, list] = None,
+    rotation: Union[np.ndarray, list, Rotation] = None,
+    rot_origin: Union[np.ndarray, list, str] = None,
+    x_pixels: int = None,
+    y_pixels: int = None,
+    xlim: Tuple[float, float] = None,
+    ylim: Tuple[float, float] = None,
+    backend: str = None,
+    dens_weight: bool = False,
+    normalize: bool = True,
+    hmin: bool = False,
+):
     """
     Interpolate 3D particle data to a 2D grid, using a 3D cross-section.
 
@@ -1300,42 +1466,67 @@ def interpolate_3d_cross(data: 'SarracenDataFrame',  # noqa: F821
     x_data, y_data, z_data = _rotate_xyz(data, x, y, z, rotation, rot_origin)
     h_data = _get_smoothing_lengths(data, hmin, x_pixels, y_pixels, xlim, ylim)
 
-    grid = get_backend(backend) \
-        .interpolate_3d_cross(x_data, y_data, z_data, z_slice, w_data, h_data,
-                              kernel.w, kernel.get_radius(), x_pixels,
-                              y_pixels, xlim[0], xlim[1], ylim[0], ylim[1])
+    grid = get_backend(backend).interpolate_3d_cross(
+        x_data,
+        y_data,
+        z_data,
+        z_slice,
+        w_data,
+        h_data,
+        kernel.w,
+        kernel.get_radius(),
+        x_pixels,
+        y_pixels,
+        xlim[0],
+        xlim[1],
+        ylim[0],
+        ylim[1],
+    )
 
     if normalize:
         w_norm = _get_weight(data, np.array([1] * len(w_data)), dens_weight)
-        norm_grid = get_backend(backend) \
-            .interpolate_3d_cross(x_data, y_data, z_data, z_slice, w_norm,
-                                  h_data, kernel.w, kernel.get_radius(),
-                                  x_pixels, y_pixels,
-                                  xlim[0], xlim[1], ylim[0], ylim[1])
+        norm_grid = get_backend(backend).interpolate_3d_cross(
+            x_data,
+            y_data,
+            z_data,
+            z_slice,
+            w_norm,
+            h_data,
+            kernel.w,
+            kernel.get_radius(),
+            x_pixels,
+            y_pixels,
+            xlim[0],
+            xlim[1],
+            ylim[0],
+            ylim[1],
+        )
         grid = np.nan_to_num(grid / norm_grid)
 
     return grid
 
 
-def interpolate_3d_cross_vec(data: 'SarracenDataFrame',  # noqa: F821
-                             target_x: str,
-                             target_y: str,
-                             target_z: str,
-                             z_slice: float = None,
-                             x: str = None,
-                             y: str = None,
-                             z: str = None,
-                             kernel: BaseKernel = None,
-                             rotation: Union[np.ndarray, list, Rotation] = None,  # noqa: E501
-                             rot_origin: Union[np.ndarray, list, str] = None,
-                             x_pixels: int = None,
-                             y_pixels: int = None,
-                             xlim: Tuple[float, float] = None,
-                             ylim: Tuple[float, float] = None,
-                             backend: str = None,
-                             dens_weight: bool = False,
-                             normalize: bool = True,
-                             hmin: bool = False):
+def interpolate_3d_cross_vec(
+    data: "SarracenDataFrame",  # noqa: F821
+    target_x: str,
+    target_y: str,
+    target_z: str,
+    z_slice: float = None,
+    x: str = None,
+    y: str = None,
+    z: str = None,
+    kernel: BaseKernel = None,
+    rotation: Union[np.ndarray, list, Rotation] = None,  # noqa: E501
+    rot_origin: Union[np.ndarray, list, str] = None,
+    x_pixels: int = None,
+    y_pixels: int = None,
+    xlim: Tuple[float, float] = None,
+    ylim: Tuple[float, float] = None,
+    backend: str = None,
+    dens_weight: bool = False,
+    normalize: bool = True,
+    hmin: bool = False,
+):
     """
     Interpolate 3D vector particle data to a 2D grid, using a 3D cross-section.
 
@@ -1420,9 +1611,9 @@ def interpolate_3d_cross_vec(data: 'SarracenDataFrame',  # noqa: F821
     _check_boundaries(x_pixels, y_pixels, xlim, ylim)
 
     x_data, y_data, z_data = _rotate_xyz(data, x, y, z, rotation, rot_origin)
-    target_x_data, target_y_data, _ = _rotate_data(data, target_x, target_y,
-                                                   target_z, rotation,
-                                                   rot_origin)
+    target_x_data, target_y_data, _ = _rotate_data(
+        data, target_x, target_y, target_z, rotation, rot_origin
+    )
 
     wx_data = _get_weight(data, target_x_data, dens_weight)
     wy_data = _get_weight(data, target_y_data, dens_weight)
@@ -1431,44 +1622,70 @@ def interpolate_3d_cross_vec(data: 'SarracenDataFrame',  # noqa: F821
     kernel = kernel if kernel is not None else data.kernel
     backend = backend if backend is not None else data.backend
 
-    gridx, gridy = get_backend(backend) \
-        .interpolate_3d_cross_vec(x_data, y_data, z_data, z_slice, wx_data,
-                                  wy_data, h_data, kernel.w,
-                                  kernel.get_radius(), x_pixels, y_pixels,
-                                  xlim[0], xlim[1], ylim[0], ylim[1])
+    gridx, gridy = get_backend(backend).interpolate_3d_cross_vec(
+        x_data,
+        y_data,
+        z_data,
+        z_slice,
+        wx_data,
+        wy_data,
+        h_data,
+        kernel.w,
+        kernel.get_radius(),
+        x_pixels,
+        y_pixels,
+        xlim[0],
+        xlim[1],
+        ylim[0],
+        ylim[1],
+    )
 
     if normalize:
         wx_norm = _get_weight(data, np.array([1] * len(wx_data)), dens_weight)
         wy_norm = _get_weight(data, np.array([1] * len(wy_data)), dens_weight)
-        norm_gridx, norm_gridy = get_backend(backend) \
-            .interpolate_3d_cross_vec(x_data, y_data, z_data, z_slice, wx_norm,
-                                      wy_norm, h_data, kernel.w,
-                                      kernel.get_radius(), x_pixels, y_pixels,
-                                      xlim[0], xlim[1], ylim[0], ylim[1])
+        norm_gridx, norm_gridy = get_backend(backend).interpolate_3d_cross_vec(
+            x_data,
+            y_data,
+            z_data,
+            z_slice,
+            wx_norm,
+            wy_norm,
+            h_data,
+            kernel.w,
+            kernel.get_radius(),
+            x_pixels,
+            y_pixels,
+            xlim[0],
+            xlim[1],
+            ylim[0],
+            ylim[1],
+        )
         gridx = np.nan_to_num(gridx / norm_gridx)
         gridy = np.nan_to_num(gridy / norm_gridy)
 
     return (gridx, gridy)
 
 
-def interpolate_3d_grid(data: 'SarracenDataFrame',  # noqa: F821
-                        target: str,
-                        x: str = None,
-                        y: str = None,
-                        z: str = None,
-                        kernel: BaseKernel = None,
-                        rotation: Union[np.ndarray, list, Rotation] = None,
-                        rot_origin: Union[np.ndarray, list, str] = None,
-                        x_pixels: int = None,
-                        y_pixels: int = None,
-                        z_pixels: int = None,
-                        xlim: Tuple[float, float] = None,
-                        ylim: Tuple[float, float] = None,
-                        zlim: Tuple[float, float] = None,
-                        backend: str = None,
-                        dens_weight: bool = False,
-                        normalize: bool = True,
-                        hmin: bool = False):
+def interpolate_3d_grid(
+    data: "SarracenDataFrame",  # noqa: F821
+    target: str,
+    x: str = None,
+    y: str = None,
+    z: str = None,
+    kernel: BaseKernel = None,
+    rotation: Union[np.ndarray, list, Rotation] = None,
+    rot_origin: Union[np.ndarray, list, str] = None,
+    x_pixels: int = None,
+    y_pixels: int = None,
+    z_pixels: int = None,
+    xlim: Tuple[float, float] = None,
+    ylim: Tuple[float, float] = None,
+    zlim: Tuple[float, float] = None,
+    backend: str = None,
+    dens_weight: bool = False,
+    normalize: bool = True,
+    hmin: bool = False,
+):
     """
     Interpolate 3D particle data to a 3D grid of pixels
 
@@ -1563,24 +1780,48 @@ def interpolate_3d_grid(data: 'SarracenDataFrame',  # noqa: F821
     kernel = kernel if kernel is not None else data.kernel
     backend = backend if backend is not None else data.backend
 
-    x_data, y_data, z_data = _rotate_xyz(data, x, y, data.zcol,
-                                         rotation, rot_origin)
-    h_data = _get_smoothing_lengths(data, hmin, x_pixels, y_pixels,
-                                    xlim, ylim)
+    x_data, y_data, z_data = _rotate_xyz(data, x, y, data.zcol, rotation, rot_origin)
+    h_data = _get_smoothing_lengths(data, hmin, x_pixels, y_pixels, xlim, ylim)
 
-    grid = get_backend(backend)\
-        .interpolate_3d_grid(x_data, y_data, z_data, w_data, h_data, kernel.w,
-                             kernel.get_radius(), x_pixels, y_pixels, z_pixels,
-                             xlim[0], xlim[1], ylim[0], ylim[1],
-                             zlim[0], zlim[1])
+    grid = get_backend(backend).interpolate_3d_grid(
+        x_data,
+        y_data,
+        z_data,
+        w_data,
+        h_data,
+        kernel.w,
+        kernel.get_radius(),
+        x_pixels,
+        y_pixels,
+        z_pixels,
+        xlim[0],
+        xlim[1],
+        ylim[0],
+        ylim[1],
+        zlim[0],
+        zlim[1],
+    )
 
     if normalize:
         w_norm = _get_weight(data, np.array([1] * len(w_data)), dens_weight)
-        norm_grid = get_backend(backend)\
-            .interpolate_3d_grid(x_data, y_data, z_data, w_norm, h_data,
-                                 kernel.w, kernel.get_radius(), x_pixels,
-                                 y_pixels, z_pixels, xlim[0], xlim[1], ylim[0],
-                                 ylim[1], zlim[0], zlim[1])
+        norm_grid = get_backend(backend).interpolate_3d_grid(
+            x_data,
+            y_data,
+            z_data,
+            w_norm,
+            h_data,
+            kernel.w,
+            kernel.get_radius(),
+            x_pixels,
+            y_pixels,
+            z_pixels,
+            xlim[0],
+            xlim[1],
+            ylim[0],
+            ylim[1],
+            zlim[0],
+            zlim[1],
+        )
         grid = np.nan_to_num(grid / norm_grid)
 
     return grid
@@ -1600,8 +1841,8 @@ def get_backend(code: str) -> BaseBackend:
     -------
     CPUBackend: The backend to use for interpolation.
     """
-    if code == 'cpu':
+    if code == "cpu":
         return CPUBackend
-    if code == 'gpu':
+    if code == "gpu":
         return GPUBackend
     raise ValueError("Invalid backend")
