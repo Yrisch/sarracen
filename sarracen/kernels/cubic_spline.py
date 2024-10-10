@@ -12,11 +12,11 @@ class CubicSplineKernel(BaseKernel):
         return 2
 
     @staticmethod
-    @njit(fastmath=True)
+    @njit(fastmath=True, cache=True)
     def w(q: float, ndim: int):
-        norm = 2 / 3 if (ndim == 1) \
-            else 10 / (7 * np.pi) if (ndim == 2) \
-            else 1 / np.pi
+        norm = 2 / 3 if (ndim == 1) else 10 / (7 * np.pi) if (ndim == 2) else 1 / np.pi
 
-        return norm * ((1 - 1.5 * q**2 + 0.75 * q**3) * (0 <= q) * (q < 1)
-                       + 0.25 * (2 - q)**3 * (1 <= q) * (q < 2))
+        return norm * (
+            (1 - 1.5 * q**2 + 0.75 * q**3) * (0 <= q) * (q < 1)
+            + 0.25 * (2 - q) ** 3 * (1 <= q) * (q < 2)
+        )
