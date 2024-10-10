@@ -18,7 +18,7 @@ class BaseKernel:
 
     @staticmethod
     def w(q: float, dim: int) -> float:
-        """ Get the normalized weight of this kernel.
+        """Get the normalized weight of this kernel.
 
         Parameters
         ----------
@@ -36,7 +36,7 @@ class BaseKernel:
         return 1
 
     def get_column_kernel(self, samples: int = 1000) -> np.ndarray:
-        """ Integrate a given 3D kernel over the z-axis.
+        """Integrate a given 3D kernel over the z-axis.
 
         Parameters
         ----------
@@ -65,7 +65,7 @@ class BaseKernel:
         return c_kernel
 
     def get_column_kernel_func(self, samples):
-        """ Generate a numba-accelerated column kernel function.
+        """Generate a numba-accelerated column kernel function.
 
         Creates a numba-accelerated function for column kernel weights. This
         function can be utilized similarly to kernel.w().
@@ -84,17 +84,17 @@ class BaseKernel:
         column_kernel = self.get_column_kernel(samples)
         radius = self.get_radius()
 
-        @njit(fastmath=True)
-        def func(q, dim):
-            # using np.linspace() would break compatibility with the GPU
-            # backend, so the calculation here is performed manually.
-            wab_index = q * (samples - 1) / radius
-            index = min(max(0, int(math.floor(wab_index))), samples - 1)
-            index1 = min(max(0, int(math.ceil(wab_index))), samples - 1)
-            t = wab_index - index
-            return column_kernel[index] * (1 - t) + column_kernel[index1] * t
+        # @njit(fastmath=True)
+        # def func(q, dim):
+        #     # using np.linspace() would break compatibility with the GPU
+        #     # backend, so the calculation here is performed manually.
+        #     wab_index = q * (samples - 1) / radius
+        #     index = min(max(0, int(math.floor(wab_index))), samples - 1)
+        #     index1 = min(max(0, int(math.ceil(wab_index))), samples - 1)
+        #     t = wab_index - index
+        #     return column_kernel[index] * (1 - t) + column_kernel[index1] * t
 
-        return func
+        return column_kernel
 
     # Internal function for performing the integral in _get_column_kernel()
     @staticmethod
@@ -104,9 +104,9 @@ class BaseKernel:
 
         for i in prange(samples):
             q_xy = radius * i / (samples - 1)
-            bounds = np.sqrt(radius ** 2 - q_xy ** 2)
+            bounds = np.sqrt(radius**2 - q_xy**2)
             q_z = np.linspace(0, bounds, samples)
-            q = np.sqrt(q_xy ** 2 + q_z ** 2)
+            q = np.sqrt(q_xy**2 + q_z**2)
             y = wfunc(q, 3)
             result[i] = 2 * np.trapz(y, x=q_z)
 

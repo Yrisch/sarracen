@@ -1152,6 +1152,7 @@ def interpolate_3d_proj(
         h_data,
         weight_function,
         kernel.get_radius(),
+        integral_samples,
         x_pixels,
         y_pixels,
         xlim[0],

@@ -173,6 +173,7 @@ class CPUBackend(BaseBackend):
         h: ndarray,
         weight_function: CPUDispatcher,
         kernel_radius: float,
+        samples: float,
         x_pixels: int,
         y_pixels: int,
         x_min: float,
@@ -194,6 +195,7 @@ class CPUBackend(BaseBackend):
             h,
             weight_function,
             kernel_radius,
+            samples,
             x_pixels,
             y_pixels,
             x_min,
@@ -405,7 +407,11 @@ class CPUBackend(BaseBackend):
     # 3D data.
 
     @staticmethod
-    @njit(parallel=True, fastmath=True)
+    @njit(
+        "float64[:,:](float64[::1],float64[::1],float64[::1],int64,float32[::1],float32[::1],float64[::1],int64,int64,int64,int64,float64,float64,float64,float64,int64)",
+        parallel=True,
+        fastmath=True,
+    )
     def _fast_2d(
         x_data,
         y_data,
@@ -415,6 +421,7 @@ class CPUBackend(BaseBackend):
         h_data,
         weight_function,
         kernel_radius,
+        samples,
         x_pixels,
         y_pixels,
         x_min,
@@ -428,20 +435,19 @@ class CPUBackend(BaseBackend):
         pixwidthy = (y_max - y_min) / y_pixels
         pixwidthx1 = 1 / pixwidthx
         pixwidthy1 = 1 / pixwidthy
-        radkern2 = kernel_radius**2
+        radkern2 = kernel_radius * kernel_radius
         if not n_dims == 2:
             dz = np.float64(z_slice) - z_data
         else:
             dz = np.zeros(x_data.size)
 
-        term = w_data / h_data**n_dims
-
-        output_local = np.zeros((get_num_threads(), y_pixels, x_pixels))
-        dx2i = np.zeros((get_num_threads(), x_pixels))
+        term = w_data / (h_data * h_data)
 
         # thread safety:
         # each thread has its own grid, which are combined after interpolation
         for thread in prange(get_num_threads()):
+            # output_local = np.zeros((y_pixels, x_pixels))
+            dx2i = np.zeros((x_pixels))
             block_size = x_data.size / get_num_threads()
             range_start = int(thread * block_size)
             range_end = int((thread + 1) * block_size)
@@ -452,7 +458,8 @@ class CPUBackend(BaseBackend):
                     continue
 
                 rad = kernel_radius * h_data[i]
-                hi21 = 1 / (h_data[i] ** 2)
+                hi21 = 1 / (h_data[i] * h_data[i])
+                termi = term[i]
                 xi = x_data[i]
                 yi = y_data[i]
                 dzi = dz[i]
@@ -479,14 +486,8 @@ class CPUBackend(BaseBackend):
 
                 # precalculate differences in the x-direction (optimization)
                 for ipix in range(ipixmin, ipixmax):
-                    dx2i[thread, ipix] = (
-                        (x_min + (ipix + 0.5) * pixwidthx - xi) ** 2 + dzi**2
-                    ) * hi21
-
-                # determine differences in the y-direction
-
-                # calculate contributions at pixels i, j from particle at x, y
-                # q2 = dx2i + dy2.reshape(len(dy2), 1)
+                    dxi = x_min + (ipix + 0.5) * pixwidthx - xi
+                    dx2i[ipix] = (dxi * dxi + dzi * dzi) * hi21
 
                 for jpix in range(jpixmax - jpixmin):
                     jp = jpix + jpixmin
@@ -495,14 +496,23 @@ class CPUBackend(BaseBackend):
                     dy2 = dy * dy * hi21
                     for ipix in range(ipixmax - ipixmin):
                         ip = ipix + ipixmin
-                        q2 = dx2i[thread, ip] + dy2
+                        q2 = dx2i[ip] + dy2
                         if q2 > radkern2:
                             continue
-                        wab = weight_function(np.sqrt(q2), n_dims)
-                        output_local[thread][jp, ip] += term[i] * wab
+                        # wab = 1.0  # weight_function(np.sqrt(q2), n_dims)
+                        wab_index = np.sqrt(q2) * (samples - 1) / kernel_radius
+                        index = min(max(0, int(np.floor(wab_index))), samples - 1)
+                        index1 = min(max(0, int(np.ceil(wab_index))), samples - 1)
+                        t = wab_index - index
+                        wab = (
+                            weight_function[index] * (1 - t)
+                            + weight_function[index1] * t
+                        )
 
-        for i in range(get_num_threads()):
-            output += output_local[i]
+                        output[jp, ip] += termi * wab
+
+        # for i in range(get_num_threads()):
+        #     output += output_local[i]
 
         return output
 
