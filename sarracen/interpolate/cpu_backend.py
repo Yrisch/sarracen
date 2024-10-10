@@ -408,7 +408,7 @@ class CPUBackend(BaseBackend):
 
     @staticmethod
     @njit(
-        "float64[:,:](float64[::1],float64[::1],float64[::1],int64,float32[::1],float32[::1],float64[::1],int64,int64,int64,int64,float64,float64,float64,float64,int64)",
+        "float64[:,::1](float64[::1],float64[::1],float64[::1],int64,float64[::1],float64s[::1],float64[::1],int64,int64,int64,int64,float64,float64,float64,float64,int64)",
         parallel=True,
         fastmath=True,
     )
