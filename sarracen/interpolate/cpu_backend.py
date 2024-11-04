@@ -408,7 +408,7 @@ class CPUBackend(BaseBackend):
 
     @staticmethod
     @njit(
-        "float64[:,::1](float64[::1],float64[::1],float64[::1],int64,float64[::1],float64[::1],float64[::1],int64,int64,int64,int64,float64,float64,float64,float64,int64)",
+        "float64[:,::1](float64[::1],float64[::1],float64[::1],int64,float64[::1],float64[::1],float64[::1],float64,int64,int64,int64,float64,float64,float64,float64,int64)",
         parallel=True,
         fastmath=True,
     )
@@ -433,21 +433,22 @@ class CPUBackend(BaseBackend):
         output = np.zeros((y_pixels, x_pixels))
         pixwidthx = (x_max - x_min) / x_pixels
         pixwidthy = (y_max - y_min) / y_pixels
-        pixwidthx1 = 1 / pixwidthx
-        pixwidthy1 = 1 / pixwidthy
         radkern2 = kernel_radius * kernel_radius
         if not n_dims == 2:
             dz = np.float64(z_slice) - z_data
         else:
             dz = np.zeros(x_data.size)
-
-        term = w_data / (h_data * h_data)
+        xminpix = x_min - 0.5 * pixwidthx
+        yminpix = y_min - 0.5 * pixwidthy
+        ddq = (samples) / radkern2
+        dq = 1.0 / ddq
 
         # thread safety:
         # each thread has its own grid, which are combined after interpolation
         for thread in prange(get_num_threads()):
             # output_local = np.zeros((y_pixels, x_pixels))
             dx2i = np.zeros((x_pixels))
+            # row = np.zeros((x_pixels))
             block_size = x_data.size / get_num_threads()
             range_start = int(thread * block_size)
             range_end = int((thread + 1) * block_size)
@@ -458,22 +459,37 @@ class CPUBackend(BaseBackend):
                     continue
 
                 rad = kernel_radius * h_data[i]
-                hi21 = 1 / (h_data[i] * h_data[i])
-                termi = term[i]
                 xi = x_data[i]
+
+                xpixmin = xi - rad
+                if xpixmin > x_max:
+                    continue
+                xpixmax = xi + rad
+                if xpixmax < x_min:
+                    continue
+
                 yi = y_data[i]
+                ypixmin = yi - rad
+                if ypixmin > y_max:
+                    continue
+                ypixmax = xi + rad
+                if ypixmax < y_min:
+                    continue
+                hi = h_data[i]
+                hi1 = 1.0 / hi
+                hi21 = hi1 * hi1
+                termi = w_data[i] * hi21
                 dzi = dz[i]
 
                 # determine pixels that this particle contributes to
-                ipixmin = int(np.rint((xi - rad - x_min) * pixwidthx1))
-                jpixmin = int(np.rint((yi - rad - y_min) * pixwidthy1))
-                ipixmax = int(np.rint((xi + rad - x_min) * pixwidthx1))
-                jpixmax = int(np.rint((yi + rad - y_min) * pixwidthy1))
-
-                if ipixmax < 0 or ipixmin > x_pixels:
-                    continue
-                if jpixmax < 0 or jpixmin > y_pixels:
-                    continue
+                npixpartx = int((rad / pixwidthx)) + 1
+                npixparty = int((rad / pixwidthy)) + 1
+                ipixi = int((xi - x_min) / pixwidthx) + 1
+                jpixi = int((yi - y_min) / pixwidthy) + 1
+                ipixmin = ipixi - npixpartx
+                jpixmin = jpixi - npixparty
+                ipixmax = ipixi + npixpartx
+                jpixmax = jpixi + npixparty
 
                 if ipixmin < 0:
                     ipixmin = 0
@@ -484,36 +500,32 @@ class CPUBackend(BaseBackend):
                 if jpixmax > y_pixels:
                     jpixmax = y_pixels
 
+                xi = xminpix + ipixi * pixwidthx
+                yi = yminpix + jpixi * pixwidthy
+
                 # precalculate differences in the x-direction (optimization)
                 for ipix in range(ipixmin, ipixmax):
-                    dxi = x_min + (ipix + 0.5) * pixwidthx - xi
+                    dxi = (xminpix + ipix * pixwidthx) - xi
                     dx2i[ipix] = (dxi * dxi + dzi * dzi) * hi21
 
-                for jpix in range(jpixmax - jpixmin):
-                    jp = jpix + jpixmin
-                    ypix = y_min + (jp + 0.5) * pixwidthy
+                for jpix in range(jpixmin, jpixmax):
+                    ypix = yminpix + jpix * pixwidthy
                     dy = ypix - yi
                     dy2 = dy * dy * hi21
-                    for ipix in range(ipixmax - ipixmin):
-                        ip = ipix + ipixmin
-                        q2 = dx2i[ip] + dy2
-                        if q2 > radkern2:
+                    for ipix in range(ipixmin, ipixmax):
+                        q2 = dx2i[ipix] + dy2
+                        if q2 < radkern2:
+                            # wab = 1.0  # weight_function(np.sqrt(q2), n_dims)
+                            index = max(0, int(q2 * ddq))
+                            index1 = min(index + 1, samples)
+                            dxx = q2 - index * dq
+                            dwdx = (
+                                weight_function[index1] - weight_function[index]
+                            ) * ddq
+                            wab = weight_function[index] + dwdx * dxx
+                            output[jpix, ipix] += termi * wab
+                        else:
                             continue
-                        # wab = 1.0  # weight_function(np.sqrt(q2), n_dims)
-                        wab_index = np.sqrt(q2) * (samples - 1) / kernel_radius
-                        index = min(max(0, int(np.floor(wab_index))), samples - 1)
-                        index1 = min(max(0, int(np.ceil(wab_index))), samples - 1)
-                        t = wab_index - index
-                        wab = (
-                            weight_function[index] * (1 - t)
-                            + weight_function[index1] * t
-                        )
-
-                        output[jp, ip] += termi * wab
-
-        # for i in range(get_num_threads()):
-        #     output += output_local[i]
-
         return output
 
     # Underlying CPU numba-compiled code for exact interpolation of 2D data to
