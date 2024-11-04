@@ -98,16 +98,26 @@ class BaseKernel:
 
     # Internal function for performing the integral in _get_column_kernel()
     @staticmethod
-    @njit(fastmath=True, parallel=True)
+    @njit(fastmath=False, parallel=False)
     def _int_func(radius, samples, wfunc):
-        result = np.zeros(samples)
+        result = np.zeros(samples + 1)
+        r2 = radius * radius
 
-        for i in prange(samples):
-            q_xy = radius * i / (samples - 1)
-            bounds = np.sqrt(radius**2 - q_xy**2)
-            q_z = np.linspace(0, bounds, samples)
-            q = np.sqrt(q_xy**2 + q_z**2)
-            y = wfunc(q, 3)
-            result[i] = 2 * np.trapz(y, x=q_z)
+        for i in range(samples):
+            q_xy2 = i * (r2 / samples)
+            bounds = np.sqrt(r2 - q_xy2)
+            dz = bounds / 99.0
+            coldens = 0.0
+            for j in range(100):
+                q_z = j * dz
+                q = np.sqrt(q_xy2 + q_z * q_z)
+                y = wfunc(q, 3)
+                if j == 0 or j == 99:
+                    coldens += 0.5 * y * dz
+                else:
+                    coldens += y * dz
+            result[i] = 2 * coldens
+
+        result[samples] = 0.0
 
         return result

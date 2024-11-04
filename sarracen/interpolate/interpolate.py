@@ -475,7 +475,7 @@ def _get_smoothing_lengths(
         pix_size = np.maximum(pix_size, (ylim[1] - ylim[0]) / y_pixels)
         h_data = np.maximum(data[data.hcol].to_numpy(), 0.5 * pix_size)
     else:
-        h_data = data[data.hcol].to_numpy()
+        h_data = data[data.hcol].to_numpy(dtype="float64")
 
     return h_data
 
