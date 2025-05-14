@@ -100,7 +100,7 @@ class BaseKernel:
     @staticmethod
     @njit(fastmath=False, parallel=False)
     def _int_func(radius, samples, wfunc):
-        result = np.zeros(samples + 1,dtype="float64")
+        result = np.zeros(samples + 1,dtype=np.float64)
         r2 = radius * radius
 
         for i in range(samples):
