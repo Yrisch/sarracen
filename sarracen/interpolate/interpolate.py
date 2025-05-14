@@ -1141,7 +1141,7 @@ def interpolate_3d_proj(
     kernel = kernel if kernel is not None else data.kernel
     backend = backend if backend is not None else data.backend
 
-    weight_function = kernel.get_column_kernel_func(integral_samples)
+    weight_function = kernel.get_column_kernel_func(integral_samples).astype(np.float64)
 
     h_data = _get_smoothing_lengths(data, hmin, x_pixels, y_pixels, xlim, ylim)
     grid = get_backend(backend).interpolate_3d_projection(
