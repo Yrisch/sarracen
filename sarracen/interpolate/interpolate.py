@@ -292,10 +292,11 @@ def _rotate_data(data, x, y, z, rotation, rot_origin):
         if rot_origin is None:
             # rot_origin = [0, 0, 0]
             rot_origin = (vectors.min(0) + vectors.max(0)) / 2
-        elif rot_origin == "com":
-            rot_origin = data.centre_of_mass()
-        elif rot_origin == "midpoint":
-            rot_origin = (vectors.min(0) + vectors.max(0)) / 2
+        elif rot_origin is type(str):
+            if rot_origin == "com":
+                rot_origin = data.centre_of_mass()
+            elif rot_origin == "midpoint":
+                rot_origin = (vectors.min(0) + vectors.max(0)) / 2
         elif not isinstance(rot_origin, (list, pd.Series, np.ndarray)):
             raise ValueError(
                 "rot_origin should be an [x, y, z] point or " "'com' or 'midpoint'"
@@ -1141,8 +1142,7 @@ def interpolate_3d_proj(
     kernel = kernel if kernel is not None else data.kernel
     backend = backend if backend is not None else data.backend
 
-    weight_function = kernel.get_column_kernel_func(integral_samples).astype(np.float64)
-
+    weight_function = kernel.get_column_kernel_func(integral_samples)
     h_data = _get_smoothing_lengths(data, hmin, x_pixels, y_pixels, xlim, ylim)
     grid = get_backend(backend).interpolate_3d_projection(
         x_data,
