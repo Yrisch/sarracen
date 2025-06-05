@@ -472,7 +472,7 @@ class CPUBackend(BaseBackend):
                 ypixmin = yi - rad
                 if ypixmin > y_max:
                     continue
-                ypixmax = xi + rad
+                ypixmax = yi + rad
                 if ypixmax < y_min:
                     continue
                 hi = h_data[i]
