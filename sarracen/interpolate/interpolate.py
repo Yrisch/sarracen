@@ -1042,6 +1042,7 @@ def interpolate_3d_proj(
     dens_weight: bool = None,
     normalize: bool = True,
     hmin: bool = False,
+    zobserver: float = None
 ):
     """
     Interpolate 3D particle data to a 2D grid of pixels.
@@ -1144,6 +1145,14 @@ def interpolate_3d_proj(
 
     weight_function = kernel.get_column_kernel_func(integral_samples)
     h_data = _get_smoothing_lengths(data, hmin, x_pixels, y_pixels, xlim, ylim)
+
+    zfrac = (z_data-zobserver)
+    zfrac = np.where(zfrac > 0,np.inf,zfrac)
+    zfrac = np.abs(zobserver/zfrac)
+    x_data *= zfrac 
+    y_data *= zfrac 
+    h_data *= zfrac 
+
     grid = get_backend(backend).interpolate_3d_projection(
         x_data,
         y_data,
