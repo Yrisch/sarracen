@@ -250,6 +250,7 @@ class GPUBackend(BaseBackend):
                      z_data: ndarray,
                      w_data: ndarray,
                      h_data: ndarray,
+                     weight_function:ndarray,
                      kernel_radius: float,
                      x_pixels: int,
                      y_pixels: int,
@@ -261,6 +262,7 @@ class GPUBackend(BaseBackend):
                      image) -> None:
             pixwidthx = (x_max - x_min) / x_pixels
             pixwidthy = (y_max - y_min) / y_pixels
+            samples   = len(weight_function)
 
             i = cuda.grid(1)
             if i < len(x_data):
@@ -311,12 +313,14 @@ class GPUBackend(BaseBackend):
 
                         # calculate contributions at pixels i, j due to
                         # particle at x, y
-                        q = math.sqrt(dx2 + dy2 + dz2)
-
-                        # add contribution to image
+                        q = math.sqrt(dx2+dy2+dz2) 
                         if q < kernel_radius:
-                            # atomic protects against race conditions.
-                            wab = weight_function(q, n_dims)
+                        
+                            wab_index = q * (samples - 1) / kernel_radius
+                            index = min(max(0, int(math.floor(wab_index))), samples - 1)
+                            index1 = min(max(0, int(math.ceil(wab_index))), samples - 1)
+                            t = wab_index - index
+                            wab = weight_function[index] * (1 - t) + weight_function[index1] * t
                             jp = jpix + jpixmin
                             ip = ipix + ipixmin
                             cuda.atomic.add(image, (jp, ip), term * wab)
@@ -330,13 +334,14 @@ class GPUBackend(BaseBackend):
         d_z = cuda.to_device(z_data)
         d_w = cuda.to_device(w_data)
         d_h = cuda.to_device(h_data)
+        d_wf = cuda.to_device(weight_function)
         # CUDA kernels have no return values, so the image data must be
         # allocated on the device beforehand.
         d_image = cuda.to_device(np.zeros((y_pixels, x_pixels)))
 
         # execute the newly compiled CUDA kernel.
         _2d_func[blockspergrid, threadsperblock](z_slice, d_x, d_y, d_z, d_w,
-                                                 d_h, kernel_radius, x_pixels,
+                                                 d_h, d_wf, kernel_radius, x_pixels,
                                                  y_pixels, x_min, x_max, y_min,
                                                  y_max, n_dims, d_image)
 

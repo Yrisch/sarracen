@@ -4,6 +4,7 @@ from numba import njit, prange, get_num_threads
 from numba.core.registry import CPUDispatcher
 from numpy import ndarray
 import numpy as np
+import math
 
 from ..interpolate.base_backend import BaseBackend
 from ..kernels.cubic_spline_exact import line_int, surface_int
@@ -249,6 +250,7 @@ class CPUBackend(BaseBackend):
             dz = np.zeros(x_data.size)
 
         term = w_data / h_data ** n_dims
+        samples = len(weight_function)
 
         output_local = np.zeros((get_num_threads(), y_pixels, x_pixels))
 
@@ -300,9 +302,14 @@ class CPUBackend(BaseBackend):
 
                 for jpix in range(jpixmax - jpixmin):
                     for ipix in range(ipixmax - ipixmin):
-                        if np.sqrt(q2[jpix][ipix]) > kernel_radius:
+                        q = np.sqrt(q2[jpix][ipix]) 
+                        if q > kernel_radius:
                             continue
-                        wab = weight_function(np.sqrt(q2[jpix][ipix]), n_dims)
+                        wab_index = q * (samples - 1) / kernel_radius
+                        index = min(max(0, int(math.floor(wab_index))), samples - 1)
+                        index1 = min(max(0, int(math.ceil(wab_index))), samples - 1)
+                        t = wab_index - index
+                        wab = weight_function[index] * (1 - t) + weight_function[index1] * t
                         jp = jpix + jpixmin
                         ip = ipix + ipixmin
                         output_local[thread][jp, ip] += term[i] * wab

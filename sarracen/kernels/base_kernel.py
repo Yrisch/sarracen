@@ -86,17 +86,17 @@ class BaseKernel:
         column_kernel = self.get_column_kernel(samples)
         radius = self.get_radius()
 
-        @njit(fastmath=True)
-        def func(q: float, dim: int) -> float:
-            # using np.linspace() would break compatibility with the GPU
-            # backend, so the calculation here is performed manually.
-            wab_index = q * (samples - 1) / radius
-            index = min(max(0, int(math.floor(wab_index))), samples - 1)
-            index1 = min(max(0, int(math.ceil(wab_index))), samples - 1)
-            t = wab_index - index
-            return column_kernel[index] * (1 - t) + column_kernel[index1] * t
+        # @njit(fastmath=True)
+        # def func(q: float, dim: int) -> float:
+        #     # using np.linspace() would break compatibility with the GPU
+        #     # backend, so the calculation here is performed manually.
+        #     wab_index = q * (samples - 1) / radius
+        #     index = min(max(0, int(math.floor(wab_index))), samples - 1)
+        #     index1 = min(max(0, int(math.ceil(wab_index))), samples - 1)
+        #     t = wab_index - index
+        #     return column_kernel[index] * (1 - t) + column_kernel[index1] * t
 
-        return func
+        return column_kernel
 
     # Internal function for performing the integral in _get_column_kernel()
     @staticmethod
