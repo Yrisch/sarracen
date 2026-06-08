@@ -961,7 +961,8 @@ def interpolate_3d_proj(data: 'SarracenDataFrame',  # noqa: F821
                         backend: Union[str, None] = None,
                         dens_weight: Union[bool, None] = None,
                         normalize: bool = True,
-                        hmin: bool = False) -> np.ndarray:
+                        hmin: bool = False,
+                        zobserver: float = 0.) -> np.ndarray:
     """
     Interpolate 3D particle data to a 2D grid of pixels.
 
@@ -1064,6 +1065,16 @@ def interpolate_3d_proj(data: 'SarracenDataFrame',  # noqa: F821
     weight_function = kernel.get_column_kernel_func(integral_samples)
 
     h_data = _get_smoothing_lengths(data, hmin, x_pixels, y_pixels, xlim, ylim)
+
+    if (abs(zobserver) > 0.1):
+        dscreen = 0.9*zobserver
+        zfrac = (z_data-zobserver)
+        zfrac = np.where(zfrac > 0.1*zobserver,np.inf,zfrac)
+        zfrac = np.abs(dscreen/zfrac)
+        x_data *= zfrac 
+        y_data *= zfrac 
+        h_data *= zfrac
+        # print(z_data,zfrac)
 
     grid = get_backend(backend) \
         .interpolate_3d_projection(x_data, y_data, w_data, h_data,
